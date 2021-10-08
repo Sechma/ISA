@@ -1,5 +1,8 @@
 #include <iostream>
 #include <unistd.h>
+#include <string>
+
+#include<bits/stdc++.h>
 #include "mytftpclient.h"
 
 
@@ -11,28 +14,51 @@ int main( int argc, char* argv[]) {
 		return 1;
 	}
 	else{
-		int arg;
-		while( (arg = getopt(argc,argv,"RWdtsmca:")) != -1){
-			switch(arg){
+		int opt,counter_RW = 0;
+		bool R_flag = false; /* Flag uchovva hodnotu parametru pro cteni nebo zapis */
+		bool multi_flag = false;/*Flag for multicast*/
+		while( (opt = getopt(argc,argv,"RWdtsmc:a:")) != -1){
+			switch(opt){
+				case('R'):
+					R_flag = true;
 				case ('W'):
+					counter_RW++;
+					if(counter_RW > 1){ /*Bylo zadane R a W soucasne*/
+						std::cerr << "You coudnt use write and read in one command!";
+					}
 					break;
-				case ('R'):
+				case ('d'): /*Absolutni cesta /*/
 					break;
-				case 'd':
+				case ('t'):
 					break;
-				case 't':
+				case ('s'):
 					break;
-				case 's':
+				case ('m'):
+					multi_flag = true;
 					break;
-				case 'm':
+				case ('c'):
+					if(strcmp("binary", optarg)== 0){
+						std::cout <<"c:"<< optarg << std::endl;
+					}
+					else if(strcmp("octet", optarg)== 0){
+						std::cout <<"c:"<< optarg << std::endl;
+					}
+					else if(strcmp("netascii", optarg)== 0){
+						std::cout <<"c:"<< optarg << std::endl;
+					}
+					else if (strcmp("ascii", optarg)== 0){
+						std::cout <<"c:"<< optarg << std::endl;
+					}
+					else{
+						std::cerr << "Wrong mode for parametr -c "<< std::endl<<"Try: -c binary/octet/ascii/netascii";
+						return 1;
+					}
 					break;
-				case 'c':
-					break;
-				case 'a':
+				case ('a'):
 					break;
 				default:
-					std::cout<<arg;
 					std::cerr<<"Example of usage: " << argv[0] << " -R/W" << " -d /home/user/readme.txt" << std::endl;
+					return 1;
 			}
 		}
 	}
