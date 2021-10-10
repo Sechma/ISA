@@ -11,10 +11,16 @@
 CC=g++
 CFLAGS=-std=c++11
 
-all: mytftpclient
+default: mytftpclient
 
-mytftpclient: mytftpclient.o
-mytftpclient.o:mytftpclient.cpp
+mytftpclient: mytftpclient.o argparse.o
+	$(CC) $(CFLAGS) -o mytftpclient mytftpclient.o argparse.o
+
+mytftpclient.o: mytftpclient.cpp mytftpclient.h argparse.h
+	$(CC) $(CFLAGS) -c mytftpclient.cpp
+
+argparse.o:	argparse.cpp argparse.h
+	$(CC) $(CFLAGS) -c argparse.cpp
 
 clean:
 	rm *.o mytftpclient
