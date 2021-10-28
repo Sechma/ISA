@@ -14,19 +14,22 @@
 #include<err.h>
 #include <ctime>
 
+
 #include "argparse.h"
 
 
 /*Macros*/
 
 /*OPCODES 2bytes*/
-#define RRQ 1
-#define WRQ 2
-#define DATA 3
-#define ACK 4
-
-#define ERROR 5
-
+#define RRQ 01
+#define WRQ 02
+#define DATA 03
+#define ACK 04
+/*
+ 0X - 0 je zde důvodu problematiky big/little endian způsob, který používá TFTP je opačný než od ostatních architektur
+*/
+#define ERROR 05
+/*TFTP erro kody */
 struct err_codes{
 	short value[8] = {0,1,2,3,4,5,6,7};
 	std::string meaning[8] = {
@@ -40,4 +43,8 @@ struct err_codes{
 		"No such user"
 	};
 };
+
+//int read_tftp(int *sock, char* buffer_tftp, int msg_size, unsigned int *high_pass,sockaddr_in *server, sockaddr_in6 *server6,bool ipv6);
+int read_tftp(int *sock, char* buffer_tftp, int msg_size,flags *flag,sockaddr_in *server,sockaddr_in6 *server6);
+std::string file_name(std::string const & path);
 #endif
