@@ -29,6 +29,8 @@
  0X - 0 je zde důvodu problematiky big/little endian způsob, který používá TFTP je opačný než od ostatních architektur
 */
 #define ERROR 05
+#define RETRANSMIT_TIMEOUT 2000000
+#define SLEEP_TIMEOUT 1000
 /*TFTP erro kody */
 struct err_codes{
 	short value[8] = {0,1,2,3,4,5,6,7};
@@ -44,7 +46,15 @@ struct err_codes{
 	};
 };
 
+
+
+
+// 2scs
 //int read_tftp(int *sock, char* buffer_tftp, int msg_size, unsigned int *high_pass,sockaddr_in *server, sockaddr_in6 *server6,bool ipv6);
-int read_tftp(int *sock, char* buffer_tftp, int msg_size,flags *flag,sockaddr_in *server,sockaddr_in6 *server6);
+int read_tftp(int *sock, char* buffer_tftp, int msg_size,struct flags *flag,sockaddr_in *server,sockaddr_in6 *server6);
+
 std::string file_name(std::string const & path);
+
+
+
 #endif
