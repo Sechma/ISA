@@ -122,40 +122,33 @@ int main( int argc, char* argv[]) {
  			char *p_write;
  			char buffer_sent[flag.high_pass+4];
  			*(short*)buffer_sent = htons(DATA);
+ 			unsigned int counter;
  			p_write = buffer_sent + 2;
  			p_write[2] = block_num;
  			p_write += 2;
  			
  			last_size = file_size%flag.high_pass;
- 			std::cout << last_size;
+ 			counter = file_size/flag.high_pass;
  			while(1){
  				std::cout << "<<" << std::endl;
-	 			if (fread(buffer_data, flag.high_pass, 1,file_w ) == 1){
-	 				std::cout << buffer_data<<std::endl;
-	 				strcpy(p_write,buffer_data);
-	 			} 
+ 				if(counter > 0){
+		 			if (fread(buffer_data, flag.high_pass, 1,file_w ) == 1){
+		 				strcpy(p_write,buffer_data);
+		 				counter--;
+		 			}
+		 		}
 	 			else{
 	 				char * last_buffer;
 	 				last_buffer = (char*)malloc(sizeof(char)*last_size);
 	 				if( fread(last_buffer,last_size, 1,file_w ) == 1){
-	 					std::cout << last_buffer<<std::endl;
-	 					std::cout <<"len:" <<sizeof(last_buffer);
 	 					strcpy(p_write,last_buffer);
 	 					free(last_buffer);
 	 				}
 	 				else
-	 					std::cout << last_buffer<<std::endl;;
-	 					std::cout << sizeof(last_buffer);
-	 					std::cout << "neprojde";
-	 					free(last_buffer);
 	 					break;
 	 			}
-	 			msg_size = p_write - buffer_sent;
+	 			msg_size =  strlen(p_write) - strlen(buffer_sent);
 	 			c = sendto(sock,buffer_sent,msg_size,0,(struct sockaddr *) &server, server_len);
-				/*while (fread(buffer_data, 512, 1,file_w ) == 1){
-					//std::cout << buffer;
-					std::cout << std::endl << "new 512b"<<std::endl;
-				}*/
 				for(int time_wait =0; time_wait < RETRANSMIT_TIMEOUT ; time_wait += SLEEP_TIMEOUT){
 	 				c = recvfrom(sock,buffer_tftp,flag.high_pass,0,(struct sockaddr *) &server, &server_len);
 	 				if( c > 0 && c < 4){
@@ -163,8 +156,10 @@ int main( int argc, char* argv[]) {
 	 					exit(1);
 	 				}
 	 				else{
-	 					if(ntohs(*(short *)buffer_tftp) == ACK)
+	 					if(ntohs(*(short *)buffer_tftp) == ACK){
+	 						std::cout << "ACK:" << counter;
 	 						break;
+	 					}
 	 					if( ntohs(*(short *)buffer_tftp) == ERROR){
 	 						std::cerr << "Error on server side" << std::endl;
 	 						exit(1);
@@ -197,7 +192,7 @@ int read_tftp(int *sock, char* buffer_tftp, int msg_size,struct flags *flag,sock
 	FILE *file_r;
 	file_r = fopen(filename.c_str(),"wb+");
 
-
+	//Todo timer
 	if(!flag->ipv6_flag){
 		server_len = sizeof(*server);
 		c = sendto(*sock,buffer_tftp,msg_size,0,(struct sockaddr *) server, server_len);
