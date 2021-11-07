@@ -103,34 +103,19 @@ int main( int argc, char* argv[]) {
 			file_size = ftell (file_w);
 			rewind (file_w);
 
- 			for(int time_wait =0; time_wait < RETRANSMIT_TIMEOUT ; time_wait += SLEEP_TIMEOUT){
- 				c = recvfrom(sock,buffer_tftp,flag.high_pass,0,(struct sockaddr *) &server, &server_len);
- 				if( c > 0 && c < 4){
- 					std::cerr << "Wrong sent packet!"<<std::endl;
- 					exit(1);
- 				}
- 				else{
- 					if(ntohs(*(short *)buffer_tftp) == ACK)
- 						break;
- 					if( ntohs(*(short *)buffer_tftp) == ERROR){
- 						std::cerr << "Error on server side" << std::endl;
- 						exit(1);
- 					}
- 				}
- 				usleep(SLEEP_TIMEOUT);
- 			}
- 			char *p_write;
- 			char buffer_sent[flag.high_pass+4];
- 			*(short*)buffer_sent = htons(DATA);
+			wait_for_ack(&sock,buffer_tftp,&flag,(struct sockaddr_in *) &server, &server_len);
  			unsigned int counter;
- 			p_write = buffer_sent + 2;
- 			p_write[2] = block_num;
- 			p_write += 2;
- 			
  			last_size = file_size%flag.high_pass;
  			counter = file_size/flag.high_pass;
  			while(1){
- 				std::cout << "<<" << std::endl;
+ 				char *p_write;
+ 				char buffer_sent[flag.high_pass+4];
+ 				*(short*)buffer_sent = htons(DATA);
+ 				p_write = buffer_sent + 2;
+ 				*(short*)p_write = htons(block_num);
+ 				p_write += 2;
+
+ 				std::cout << std::endl << "<<" << " Writing file..." << std::endl;
  				if(counter > 0){
 		 			if (fread(buffer_data, flag.high_pass, 1,file_w ) == 1){
 		 				strcpy(p_write,buffer_data);
@@ -148,27 +133,11 @@ int main( int argc, char* argv[]) {
 	 					break;
 	 			}
 	 			msg_size =  strlen(p_write) - strlen(buffer_sent);
-	 			c = sendto(sock,buffer_sent,msg_size,0,(struct sockaddr *) &server, server_len);
-				for(int time_wait =0; time_wait < RETRANSMIT_TIMEOUT ; time_wait += SLEEP_TIMEOUT){
-	 				c = recvfrom(sock,buffer_tftp,flag.high_pass,0,(struct sockaddr *) &server, &server_len);
-	 				if( c > 0 && c < 4){
-	 					std::cerr << "Wrong sent packet!"<<std::endl;
-	 					exit(1);
-	 				}
-	 				else{
-	 					if(ntohs(*(short *)buffer_tftp) == ACK){
-	 						std::cout << "ACK:" << counter;
-	 						break;
-	 					}
-	 					if( ntohs(*(short *)buffer_tftp) == ERROR){
-	 						std::cerr << "Error on server side" << std::endl;
-	 						exit(1);
-	 					}
-	 				}
-	 				usleep(SLEEP_TIMEOUT);
- 				}
- 				p_write[2]++;
+	 			c = sendto(sock,buffer_sent,msg_size+4,0,(struct sockaddr *) &server, server_len);
+ 				wait_for_ack(&sock,buffer_tftp,&flag,(struct sockaddr_in *) &server, &server_len);
+ 				block_num++;
 			}
+			wait_for_ack(&sock,buffer_tftp,&flag,(struct sockaddr_in *) &server, &server_len);
 			fclose(file_w);
 		}
 
@@ -224,4 +193,26 @@ int read_tftp(int *sock, char* buffer_tftp, int msg_size,struct flags *flag,sock
 // Source: https://stackoverflow.com/questions/8520560/get-a-file-name-from-a-path
 std::string file_name(std::string const & path){
 	return path.substr(path.find_last_of("/\\") + 1);
+}
+
+void wait_for_ack(int *sock, char* buffer_tftp,struct flags *flag,sockaddr_in *server,socklen_t *server_len){
+	int c;
+	for(int i;i<200;i++){ //2sc wait for end
+		
+		c = recvfrom(*sock,buffer_tftp,flag->high_pass,0,(struct sockaddr *) server, server_len);
+		if( c > 0 && c < 4){
+			std::cerr << "Wrong sent packet!"<<std::endl;
+			exit(1);
+		}
+		else{
+			if(ntohs(*(short *)buffer_tftp) == ACK){
+				break;
+			}
+			if( ntohs(*(short *)buffer_tftp) == ERROR){
+				std::cerr << "Error on server side" << std::endl;
+				exit(1);
+			}
+		}
+		usleep(10000);
+	}
 }
