@@ -123,17 +123,25 @@ int main( int argc, char* argv[]) {
 		 			}
 		 		}
 	 			else{
-	 				char * last_buffer;
-	 				last_buffer = (char*)malloc(sizeof(char)*last_size);
-	 				if( fread(last_buffer,last_size, 1,file_w ) == 1){
+	 				char *last_buffer;
+	 				last_buffer = (char*)malloc(sizeof(char)*last_size+1);
+	 				memset(last_buffer,0,last_size+1);
+	 				if( fread(last_buffer,1,last_size,file_w ) == last_size){
+	 					std::cout << last_buffer << std::endl;
+	 					std::cout << last_size << std::endl;
 	 					strcpy(p_write,last_buffer);
 	 					free(last_buffer);
 	 				}
-	 				else
+	 				else{
+	 					free(last_buffer);
 	 					break;
+	 				}
 	 			}
 	 			msg_size =  strlen(p_write) - strlen(buffer_sent);
-	 			c = sendto(sock,buffer_sent,msg_size+4,0,(struct sockaddr *) &server, server_len);
+	 			if(counter == 0)
+	 				c = sendto(sock,buffer_sent,msg_size+4,0,(struct sockaddr *) &server, server_len);
+	 			else
+	 				c = sendto(sock,buffer_sent,msg_size+4,0,(struct sockaddr *) &server, server_len);
  				wait_for_ack(&sock,buffer_tftp,&flag,(struct sockaddr_in *) &server, &server_len);
  				block_num++;
 			}
@@ -160,7 +168,6 @@ int read_tftp(int *sock, char* buffer_tftp, int msg_size,struct flags *flag,sock
 	std::string filename = file_name(flag->path);
 	FILE *file_r;
 	file_r = fopen(filename.c_str(),"wb+");
-
 	//Todo timer
 	if(!flag->ipv6_flag){
 		server_len = sizeof(*server);
@@ -179,13 +186,26 @@ int read_tftp(int *sock, char* buffer_tftp, int msg_size,struct flags *flag,sock
 
 		if ( ntohs(*(short *)buffer_tftp) == ACK) fprintf(stderr, "rcat: %s\n", buffer_tftp+4);
 		else {
-			fwrite(buffer_tftp, 1, c , file_r);
+			if( 0 == flag->mode.compare("ascii")){
+				for(int i = 0 ; i < flag->high_pass ; i++){
+					if( int(buffer_tftp[i]) == 13)
+						buffer_tftp[i] = '\r';
+					if(int(buffer_tftp[i]) == 10)
+						buffer_tftp[i] = '\n';
+				}
+			}
+			if( c == 512 )
+				fwrite(buffer_tftp, 1, c , file_r);
+			else
+				fwrite(buffer_tftp, 1, c-4 , file_r);
+			std::cout << std::endl;
+			std::cout << "sizeof:" << c;
 			//write(1, buffer_tftp+4, c-4); //only for debug
 			*(short *)buffer_tftp = htons(ACK);
 			if(! flag->ipv6_flag) sendto(*sock, buffer_tftp, 4, 0, (struct sockaddr *) server,server_len);
 			else sendto(*sock, buffer_tftp, 4, 0, (struct sockaddr *) server6,server_len);
 		}
-	} while (c == 516);
+	} while (c+4 == 516);
 
 	fclose(file_r);
 	return 0;

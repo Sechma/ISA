@@ -46,10 +46,10 @@
 					flag.multi_flag = true;
 					break;
 				case ('c'):
-					if(strcmp("binary", optarg)== 0){
-						flag.mode = "binary";
+					if(strcmp("octet", optarg)== 0){
+						flag.mode = "octet";
 					}
-					else if(strcmp("octet", optarg)== 0){
+					else if(strcmp("binary", optarg)== 0){
 						flag.mode = "octet";
 					}
 					else if(strcmp("netascii", optarg)== 0){

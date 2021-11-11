@@ -17,7 +17,7 @@ struct flags{
 			std::string ip_adress = "127.0.0.1";
 			bool ipv6_flag = false;
 			std::string port = "69";
-			std::string mode ="binary";
+			std::string mode ="octet";
 };
 
 #define MAX_OCTET 1468 /*MAX OCTET IN IP (MTU)*/
