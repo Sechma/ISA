@@ -49,7 +49,8 @@ int main( int argc, char* argv[]) {
 		std::string tmt = "timeout";
 		unsigned int index = 0;
 		//buffer_tftp[MAX_OCTET+32]
-		char buffer_tftp[flag.high_pass],*p;
+		char buffer_tftp[flag.high_pass+32],*p;
+		//memset(buffer_tftp,0,flag.high_pass+32);
 		int c;
 		if( flag.RW_flag )
 			*(short*)buffer_tftp = htons(RRQ);
@@ -90,6 +91,7 @@ int main( int argc, char* argv[]) {
 			read_tftp(&sock, buffer_tftp ,msg_size,&flag, (struct sockaddr_in *) &server, (struct sockaddr_in6 *) &server6);
 		}
 		else{
+
 			int c;
 			char buffer_data[flag.high_pass];
 			ushort block_num = 1;
@@ -97,6 +99,7 @@ int main( int argc, char* argv[]) {
 			long file_size;
 			unsigned int last_size;
  			file_w = fopen(flag.path.c_str(),"rb");
+
  			c = sendto(sock,buffer_tftp,msg_size,0,(struct sockaddr *) &server, server_len);
  			
  			fseek (file_w , 0 , SEEK_END);
@@ -110,6 +113,7 @@ int main( int argc, char* argv[]) {
  			while(1){
  				char *p_write;
  				char buffer_sent[flag.high_pass+4];
+ 				memset(buffer_sent,0,flag.high_pass+4);
  				*(short*)buffer_sent = htons(DATA);
  				p_write = buffer_sent + 2;
  				*(short*)p_write = htons(block_num);
@@ -117,7 +121,19 @@ int main( int argc, char* argv[]) {
 
  				std::cout << std::endl << "<<" << " Writing file..." << std::endl;
  				if(counter > 0){
+ 					//char tmp;
+ 					//int ascii_c = 0;
 		 			if (fread(buffer_data, flag.high_pass, 1,file_w ) == 1){
+		 				/*for(int i=0;i<flag.high_pass;i++){
+		 					std::cout << buffer_data[i];
+		 					if( (0 == flag.mode.compare("netascii")) || (0 == flag.mode.compare("ascii")) ) {
+		 						std::cout << "ascii";
+			 					if( '\n' == buffer_data[i] && '\r' == buffer_data[i] ){
+			 						ascii_c++;
+			 					}
+			 				}
+		 				}*/
+		 				//std::cout <<"ascii couter: " <<ascii_c;
 		 				strcpy(p_write,buffer_data);
 		 				counter--;
 		 			}
@@ -127,8 +143,6 @@ int main( int argc, char* argv[]) {
 	 				last_buffer = (char*)malloc(sizeof(char)*last_size+1);
 	 				memset(last_buffer,0,last_size+1);
 	 				if( fread(last_buffer,1,last_size,file_w ) == last_size){
-	 					std::cout << last_buffer << std::endl;
-	 					std::cout << last_size << std::endl;
 	 					strcpy(p_write,last_buffer);
 	 					free(last_buffer);
 	 				}
@@ -138,10 +152,8 @@ int main( int argc, char* argv[]) {
 	 				}
 	 			}
 	 			msg_size =  strlen(p_write) - strlen(buffer_sent);
-	 			if(counter == 0)
-	 				c = sendto(sock,buffer_sent,msg_size+4,0,(struct sockaddr *) &server, server_len);
-	 			else
-	 				c = sendto(sock,buffer_sent,msg_size+4,0,(struct sockaddr *) &server, server_len);
+	 			c = sendto(sock,buffer_sent,msg_size+4,0,(struct sockaddr *) &server, server_len);
+	 			
  				wait_for_ack(&sock,buffer_tftp,&flag,(struct sockaddr_in *) &server, &server_len);
  				block_num++;
 			}
@@ -167,6 +179,7 @@ int read_tftp(int *sock, char* buffer_tftp, int msg_size,struct flags *flag,sock
 	socklen_t server_len;
 	std::string filename = file_name(flag->path);
 	FILE *file_r;
+	
 	file_r = fopen(filename.c_str(),"wb+");
 	//Todo timer
 	if(!flag->ipv6_flag){
@@ -180,32 +193,53 @@ int read_tftp(int *sock, char* buffer_tftp, int msg_size,struct flags *flag,sock
 	do {
 		if(!flag->ipv6_flag) server_len = sizeof(*server);
 		else server_len = sizeof(*server6);
-
-		if(!flag->ipv6_flag) c = recvfrom(*sock,buffer_tftp,flag->high_pass,0,(struct sockaddr*) server, &server_len);
-		else c = recvfrom(*sock,buffer_tftp,flag->high_pass,0,(struct sockaddr*) server6, &server_len);
+		if(!flag->ipv6_flag){
+			c = recvfrom(*sock,buffer_tftp,flag->high_pass+4,0,(struct sockaddr*) server, &server_len);
+		}
+		else c = recvfrom(*sock,buffer_tftp,flag->high_pass+4,0,(struct sockaddr*) server6, &server_len);
 
 		if ( ntohs(*(short *)buffer_tftp) == ACK) fprintf(stderr, "rcat: %s\n", buffer_tftp+4);
 		else {
-			if( 0 == flag->mode.compare("ascii")){
-				for(int i = 0 ; i < flag->high_pass ; i++){
-					if( int(buffer_tftp[i]) == 13)
-						buffer_tftp[i] = '\r';
-					if(int(buffer_tftp[i]) == 10)
-						buffer_tftp[i] = '\n';
+			bool flag_ascii = false;
+			char tmp;
+			if( (0 == flag->mode.compare("netascii")) || (0 == flag->mode.compare("ascii")) ) {
+				for(int i = 4 ; i < c ; i++){
+					if( int(buffer_tftp[i]) == 13 )
+						flag_ascii = true;
+					else{
+						if(int(buffer_tftp[i]) == 10 && flag_ascii){//13 and 10
+							flag_ascii = false;
+							tmp = '\n';
+							fwrite(&tmp, 1, 1 , file_r);
+						}
+						if(int(buffer_tftp[i]) == 0 && flag_ascii){//13 and 0
+							flag_ascii = false;
+							tmp = '\r';
+							fwrite(&tmp, 1, 1 , file_r);
+						}
+						else{
+							if( int(buffer_tftp[i]) != 10 && int(buffer_tftp[i]) != 0 ){
+							flag_ascii = false;
+							tmp = buffer_tftp[i];
+							fwrite(&tmp, 1, 1 , file_r);
+							}
+						}
+					}
 				}
 			}
-			if( c == 512 )
-				fwrite(buffer_tftp, 1, c , file_r);
-			else
-				fwrite(buffer_tftp, 1, c-4 , file_r);
-			std::cout << std::endl;
-			std::cout << "sizeof:" << c;
-			//write(1, buffer_tftp+4, c-4); //only for debug
+			/* In for i iterate from 4 because before is header of TFTP
+			*  and iam sending by byte to file raw ascii data
+			*  1310 change to \n and 130 to \r
+			*  others chars are simply wrote to file.
+			*/
+			else{
+				fwrite(buffer_tftp+4, 1, c-4 , file_r);//write(1, buffer_tftp+4, c-4); //only for debug
+			}
 			*(short *)buffer_tftp = htons(ACK);
 			if(! flag->ipv6_flag) sendto(*sock, buffer_tftp, 4, 0, (struct sockaddr *) server,server_len);
 			else sendto(*sock, buffer_tftp, 4, 0, (struct sockaddr *) server6,server_len);
 		}
-	} while (c+4 == 516);
+	} while (c == 516);
 
 	fclose(file_r);
 	return 0;
@@ -218,7 +252,6 @@ std::string file_name(std::string const & path){
 void wait_for_ack(int *sock, char* buffer_tftp,struct flags *flag,sockaddr_in *server,socklen_t *server_len){
 	int c;
 	for(int i;i<200;i++){ //2sc wait for end
-		
 		c = recvfrom(*sock,buffer_tftp,flag->high_pass,0,(struct sockaddr *) server, server_len);
 		if( c > 0 && c < 4){
 			std::cerr << "Wrong sent packet!"<<std::endl;
@@ -235,4 +268,5 @@ void wait_for_ack(int *sock, char* buffer_tftp,struct flags *flag,sockaddr_in *s
 		}
 		usleep(10000);
 	}
+
 }
