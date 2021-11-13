@@ -52,6 +52,7 @@ int main( int argc, char* argv[]) {
 		char buffer_tftp[flag.high_pass+32],*p;
 		//memset(buffer_tftp,0,flag.high_pass+32);
 		int c;
+		bool blcsize = false;
 		if( flag.RW_flag )
 			*(short*)buffer_tftp = htons(RRQ);
 		else
@@ -70,8 +71,10 @@ int main( int argc, char* argv[]) {
 			strcpy(p,blc_size.c_str());
 			p += blc_size.length()+ 1;
 			index += blc_size.length()+1;
+			blcsize = true;
 			
-			p[index] = flag.high_pass;
+			//p[index] = flag.high_pass;
+			p += flag.high_pass;
 			p += sizeof(unsigned int)+1;
 			index += sizeof(unsigned int)+1;
 		}
@@ -87,77 +90,71 @@ int main( int argc, char* argv[]) {
 		msg_size = p - buffer_tftp;
 
 		if(flag.RW_flag ){
-			//read_tftp(&sock, buffer_tftp ,msg_size,&flag.high_pass, (struct sockaddr_in *) &server, (struct sockaddr_in6 *) &server6,flag.ipv6_flag);
 			read_tftp(&sock, buffer_tftp ,msg_size,&flag, (struct sockaddr_in *) &server, (struct sockaddr_in6 *) &server6);
 		}
 		else{
-
+			/*Write tftp*/
 			int c;
 			char buffer_data[flag.high_pass];
 			ushort block_num = 1;
 			FILE * file_w;
 			long file_size;
 			unsigned int last_size;
- 			file_w = fopen(flag.path.c_str(),"rb");
+			if( (0 == flag.mode.compare("netascii")) || (0 == flag.mode.compare("ascii")) )
+ 				file_w = fopen(flag.path.c_str(),"r");
+ 			else
+ 				file_w = fopen(flag.path.c_str(),"rb");
 
- 			c = sendto(sock,buffer_tftp,msg_size,0,(struct sockaddr *) &server, server_len);
- 			
+ 			if(!flag.ipv6_flag) c = sendto(sock,buffer_tftp,msg_size,0,(struct sockaddr *) &server, server_len);
+	 		else c = sendto(sock,buffer_tftp,msg_size,0,(struct sockaddr *) &server6, server_len);
+
  			fseek (file_w , 0 , SEEK_END);
-			file_size = ftell (file_w);
+			file_size = ftell(file_w);
 			rewind (file_w);
+			
+			wait_for_ack(&sock,&flag,(struct sockaddr_in *) &server,(struct sockaddr_in6 *) &server6, &server_len);
 
-			wait_for_ack(&sock,buffer_tftp,&flag,(struct sockaddr_in *) &server, &server_len);
  			unsigned int counter;
  			last_size = file_size%flag.high_pass;
- 			counter = file_size/flag.high_pass;
- 			while(1){
- 				char *p_write;
- 				char buffer_sent[flag.high_pass+4];
- 				memset(buffer_sent,0,flag.high_pass+4);
- 				*(short*)buffer_sent = htons(DATA);
- 				p_write = buffer_sent + 2;
- 				*(short*)p_write = htons(block_num);
- 				p_write += 2;
+			counter = file_size/flag.high_pass;
+			while(1){
+				char *p_write;
+				char buffer_sent[flag.high_pass+4];
+				memset(buffer_sent,0,flag.high_pass+4);
+				*(short*)buffer_sent = htons(DATA);
+				p_write = buffer_sent + 2;
+				*(short*)p_write = htons(block_num);
+				p_write += 2;
 
- 				std::cout << std::endl << "<<" << " Writing file..." << std::endl;
- 				if(counter > 0){
- 					//char tmp;
- 					//int ascii_c = 0;
-		 			if (fread(buffer_data, flag.high_pass, 1,file_w ) == 1){
-		 				/*for(int i=0;i<flag.high_pass;i++){
-		 					std::cout << buffer_data[i];
-		 					if( (0 == flag.mode.compare("netascii")) || (0 == flag.mode.compare("ascii")) ) {
-		 						std::cout << "ascii";
-			 					if( '\n' == buffer_data[i] && '\r' == buffer_data[i] ){
-			 						ascii_c++;
-			 					}
-			 				}
-		 				}*/
-		 				//std::cout <<"ascii couter: " <<ascii_c;
-		 				strcpy(p_write,buffer_data);
-		 				counter--;
-		 			}
-		 		}
-	 			else{
-	 				char *last_buffer;
-	 				last_buffer = (char*)malloc(sizeof(char)*last_size+1);
-	 				memset(last_buffer,0,last_size+1);
-	 				if( fread(last_buffer,1,last_size,file_w ) == last_size){
-	 					strcpy(p_write,last_buffer);
-	 					free(last_buffer);
-	 				}
-	 				else{
-	 					free(last_buffer);
-	 					break;
-	 				}
-	 			}
+				std::cout << std::endl << "<<" << " Writing file..." << std::endl;
+				if(counter > 0){
+					memset(buffer_data,0,flag.high_pass);
+					if (fread(buffer_data, flag.high_pass, 1,file_w ) == 1){
+						strcpy(p_write,buffer_data);
+						counter--;
+					}
+				}
+				else{
+					char *last_buffer;
+					last_buffer = (char*)malloc(sizeof(char)*last_size+1);
+					memset(last_buffer,0,last_size+1);
+					if( fread(last_buffer,1,last_size,file_w ) == last_size){
+						strcpy(p_write,last_buffer);
+						free(last_buffer);
+					}
+					else{
+						free(last_buffer);
+						break;
+					}
+				}
 	 			msg_size =  strlen(p_write) - strlen(buffer_sent);
-	 			c = sendto(sock,buffer_sent,msg_size+4,0,(struct sockaddr *) &server, server_len);
+	 			if(!flag.ipv6_flag) c = sendto(sock,buffer_sent,msg_size+4,0,(struct sockaddr *) &server, server_len);
+	 			else c = sendto(sock,buffer_sent,msg_size+4,0,(struct sockaddr *) &server6, server_len);
 	 			
- 				wait_for_ack(&sock,buffer_tftp,&flag,(struct sockaddr_in *) &server, &server_len);
+ 				wait_for_ack(&sock,&flag,(struct sockaddr_in *) &server,(struct sockaddr_in6 *) &server6, &server_len);
  				block_num++;
 			}
-			wait_for_ack(&sock,buffer_tftp,&flag,(struct sockaddr_in *) &server, &server_len);
+			wait_for_ack(&sock,&flag,(struct sockaddr_in *) &server,(struct sockaddr_in6 *) &server6, &server_len);
 			fclose(file_w);
 		}
 
@@ -166,11 +163,6 @@ int main( int argc, char* argv[]) {
 	return 0;
 }
 
-
-/*
-Unsigned char z chamar
-
-*/
 
 /*Function*/
 //int read_tftp(int *sock, char* buffer_tftp, int msg_size, unsigned int *high_pass,sockaddr_in *server,sockaddr_in6 *server6, bool ipv6){
@@ -193,11 +185,33 @@ int read_tftp(int *sock, char* buffer_tftp, int msg_size,struct flags *flag,sock
 	do {
 		if(!flag->ipv6_flag) server_len = sizeof(*server);
 		else server_len = sizeof(*server6);
-		if(!flag->ipv6_flag){
-			c = recvfrom(*sock,buffer_tftp,flag->high_pass+4,0,(struct sockaddr*) server, &server_len);
-		}
+		if(!flag->ipv6_flag) c = recvfrom(*sock,buffer_tftp,flag->high_pass+4,0,(struct sockaddr*) server, &server_len);
 		else c = recvfrom(*sock,buffer_tftp,flag->high_pass+4,0,(struct sockaddr*) server6, &server_len);
 
+		if( flag->high_pass > 512 ){ // we expected OACK
+			if ( ntohs(*(short *)buffer_tftp) != OACK){
+				std::cerr << "Server dont sent 0ACK" << std::endl;
+				exit(1);
+			}
+			else{//send ACK for 0ACK
+				int msg;
+				char *p_ack;
+				char buffer_ack[100];
+				memset(buffer_ack,0,100);
+				*(short*)buffer_ack = htons(ACK);
+				p_ack = buffer_ack + 2;
+				p_ack += 1; //0
+
+				msg =  strlen(p_ack) - strlen(buffer_ack);
+				if(!flag->ipv6_flag) c = sendto(*sock,buffer_ack,msg,0,(struct sockaddr *) server, server_len);
+				else c = sendto(*sock,buffer_ack,msg,0,(struct sockaddr *) server6, server_len);
+				for(int i=0; i < 200 ; i++){//0,2s
+					if(!flag->ipv6_flag) c = recvfrom(*sock,buffer_tftp,flag->high_pass+4,0,(struct sockaddr*) server, &server_len);
+					else c = recvfrom(*sock,buffer_tftp,flag->high_pass+4,0,(struct sockaddr*) server6, &server_len);
+					usleep(1000);
+				}
+			}
+		}
 		if ( ntohs(*(short *)buffer_tftp) == ACK) fprintf(stderr, "rcat: %s\n", buffer_tftp+4);
 		else {
 			bool flag_ascii = false;
@@ -244,24 +258,38 @@ int read_tftp(int *sock, char* buffer_tftp, int msg_size,struct flags *flag,sock
 	fclose(file_r);
 	return 0;
 }
+
+int write_tftp(int *sock, char* buffer_tftp, int msg_size,struct flags *flag,sockaddr_in *server,sockaddr_in6 *server6){
+	return 0;
+}
+
+
 // Source: https://stackoverflow.com/questions/8520560/get-a-file-name-from-a-path
 std::string file_name(std::string const & path){
 	return path.substr(path.find_last_of("/\\") + 1);
 }
 
-void wait_for_ack(int *sock, char* buffer_tftp,struct flags *flag,sockaddr_in *server,socklen_t *server_len){
+void wait_for_ack(int *sock,struct flags *flag,sockaddr_in *server,sockaddr_in6 *server6,socklen_t *server_len){
+	std::cout << "wait_for_ack";
+	char buffer_ack[100];
+	memset(buffer_ack,0,100);
 	int c;
 	for(int i;i<200;i++){ //2sc wait for end
-		c = recvfrom(*sock,buffer_tftp,flag->high_pass,0,(struct sockaddr *) server, server_len);
+		if(!flag->ipv6_flag) c = recvfrom(*sock,buffer_ack,flag->high_pass,0,(struct sockaddr *) server, server_len);
+		else c = recvfrom(*sock,buffer_ack,flag->high_pass,0,(struct sockaddr *) server6, server_len);
 		if( c > 0 && c < 4){
 			std::cerr << "Wrong sent packet!"<<std::endl;
 			exit(1);
 		}
 		else{
-			if(ntohs(*(short *)buffer_tftp) == ACK){
+			if(ntohs(*(short *)buffer_ack) == ACK){
+				std::cout << " ACK";
 				break;
 			}
-			if( ntohs(*(short *)buffer_tftp) == ERROR){
+			if(ntohs(*(short *)buffer_ack) == OACK){
+				break;
+			}
+			if( ntohs(*(short *)buffer_ack) == ERROR){
 				std::cerr << "Error on server side" << std::endl;
 				exit(1);
 			}
