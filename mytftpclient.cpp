@@ -105,9 +105,7 @@ int main( int argc, char* argv[]) {
  			else
  				file_w = fopen(flag.path.c_str(),"rb");
 
- 			if(!flag.ipv6_flag) c = sendto(sock,buffer_tftp,msg_size,0,(struct sockaddr *) &server, server_len);
-	 		else c = sendto(sock,buffer_tftp,msg_size,0,(struct sockaddr *) &server6, server_len);
-
+	 		c = my_sendto(&sock,buffer_tftp,msg_size,&flag,(struct sockaddr_in *) &server, (struct sockaddr_in6 *) &server6);
  			fseek (file_w , 0 , SEEK_END);
 			file_size = ftell(file_w);
 			rewind (file_w);
@@ -148,9 +146,8 @@ int main( int argc, char* argv[]) {
 					}
 				}
 	 			msg_size =  strlen(p_write) - strlen(buffer_sent);
-	 			if(!flag.ipv6_flag) c = sendto(sock,buffer_sent,msg_size+4,0,(struct sockaddr *) &server, server_len);
-	 			else c = sendto(sock,buffer_sent,msg_size+4,0,(struct sockaddr *) &server6, server_len);
-	 			
+	 			c = my_sendto(&sock,buffer_sent,msg_size+4,&flag,(struct sockaddr_in *) &server, (struct sockaddr_in6 *) &server6);
+
  				wait_for_ack(&sock,&flag,(struct sockaddr_in *) &server,(struct sockaddr_in6 *) &server6, &server_len);
  				block_num++;
 			}
@@ -165,7 +162,6 @@ int main( int argc, char* argv[]) {
 
 
 /*Function*/
-//int read_tftp(int *sock, char* buffer_tftp, int msg_size, unsigned int *high_pass,sockaddr_in *server,sockaddr_in6 *server6, bool ipv6){
 int read_tftp(int *sock, char* buffer_tftp, int msg_size,struct flags *flag,sockaddr_in *server,sockaddr_in6 *server6){
 	int c;
 	socklen_t server_len;
@@ -173,20 +169,9 @@ int read_tftp(int *sock, char* buffer_tftp, int msg_size,struct flags *flag,sock
 	FILE *file_r;
 	
 	file_r = fopen(filename.c_str(),"wb+");
-	//Todo timer
-	if(!flag->ipv6_flag){
-		server_len = sizeof(*server);
-		c = sendto(*sock,buffer_tftp,msg_size,0,(struct sockaddr *) server, server_len);
-	}
-	else{
-		server_len = sizeof(*server6);
-		c = sendto(*sock,buffer_tftp,msg_size,0,(struct sockaddr *) server6, server_len);
-	}
+	my_sendto(sock,buffer_tftp,msg_size,flag,(struct sockaddr_in *) server, (struct sockaddr_in6 *) server6);
 	do {
-		if(!flag->ipv6_flag) server_len = sizeof(*server);
-		else server_len = sizeof(*server6);
-		if(!flag->ipv6_flag) c = recvfrom(*sock,buffer_tftp,flag->high_pass+4,0,(struct sockaddr*) server, &server_len);
-		else c = recvfrom(*sock,buffer_tftp,flag->high_pass+4,0,(struct sockaddr*) server6, &server_len);
+		c = my_recvfrom(sock,buffer_tftp,(flag->high_pass+4),flag,(struct sockaddr_in *) server, (struct sockaddr_in6 *) server6);
 
 		if( flag->high_pass > 512 ){ // we expected OACK
 			if ( ntohs(*(short *)buffer_tftp) != OACK){
@@ -201,13 +186,11 @@ int read_tftp(int *sock, char* buffer_tftp, int msg_size,struct flags *flag,sock
 				*(short*)buffer_ack = htons(ACK);
 				p_ack = buffer_ack + 2;
 				p_ack += 1; //0
-
 				msg =  strlen(p_ack) - strlen(buffer_ack);
-				if(!flag->ipv6_flag) c = sendto(*sock,buffer_ack,msg,0,(struct sockaddr *) server, server_len);
-				else c = sendto(*sock,buffer_ack,msg,0,(struct sockaddr *) server6, server_len);
+				my_sendto(sock,buffer_ack,msg,flag,(struct sockaddr_in *) server, (struct sockaddr_in6 *) server6);
+
 				for(int i=0; i < 200 ; i++){//0,2s
-					if(!flag->ipv6_flag) c = recvfrom(*sock,buffer_tftp,flag->high_pass+4,0,(struct sockaddr*) server, &server_len);
-					else c = recvfrom(*sock,buffer_tftp,flag->high_pass+4,0,(struct sockaddr*) server6, &server_len);
+					c = my_recvfrom(sock,buffer_tftp,(flag->high_pass+4),flag,(struct sockaddr_in *) server, (struct sockaddr_in6 *) server6);
 					usleep(1000);
 				}
 			}
@@ -250,8 +233,7 @@ int read_tftp(int *sock, char* buffer_tftp, int msg_size,struct flags *flag,sock
 				fwrite(buffer_tftp+4, 1, c-4 , file_r);//write(1, buffer_tftp+4, c-4); //only for debug
 			}
 			*(short *)buffer_tftp = htons(ACK);
-			if(! flag->ipv6_flag) sendto(*sock, buffer_tftp, 4, 0, (struct sockaddr *) server,server_len);
-			else sendto(*sock, buffer_tftp, 4, 0, (struct sockaddr *) server6,server_len);
+			my_sendto(sock,buffer_tftp,4,flag,(struct sockaddr_in *) server, (struct sockaddr_in6 *) server6);
 		}
 	} while (c == 516);
 
@@ -270,20 +252,17 @@ std::string file_name(std::string const & path){
 }
 
 void wait_for_ack(int *sock,struct flags *flag,sockaddr_in *server,sockaddr_in6 *server6,socklen_t *server_len){
-	std::cout << "wait_for_ack";
 	char buffer_ack[100];
 	memset(buffer_ack,0,100);
 	int c;
 	for(int i;i<200;i++){ //2sc wait for end
-		if(!flag->ipv6_flag) c = recvfrom(*sock,buffer_ack,flag->high_pass,0,(struct sockaddr *) server, server_len);
-		else c = recvfrom(*sock,buffer_ack,flag->high_pass,0,(struct sockaddr *) server6, server_len);
+		c = my_recvfrom(sock,buffer_ack,flag->high_pass,flag,(struct sockaddr_in *) server, (struct sockaddr_in6 *) server6);
 		if( c > 0 && c < 4){
 			std::cerr << "Wrong sent packet!"<<std::endl;
 			exit(1);
 		}
 		else{
 			if(ntohs(*(short *)buffer_ack) == ACK){
-				std::cout << " ACK";
 				break;
 			}
 			if(ntohs(*(short *)buffer_ack) == OACK){
@@ -298,3 +277,35 @@ void wait_for_ack(int *sock,struct flags *flag,sockaddr_in *server,sockaddr_in6 
 	}
 
 }
+
+int my_sendto(int *sock, char* buffer, int msg, struct flags *flag,sockaddr_in *server,sockaddr_in6 *server6 ){
+	int c;
+	socklen_t server_len;
+	if(!flag->ipv6_flag){
+		server_len = sizeof(*server);
+		c = sendto(*sock,buffer,msg,0,(struct sockaddr *) server, server_len);
+	}
+	else{
+		server_len = sizeof(*server6);
+		c = sendto(*sock,buffer,msg,0,(struct sockaddr *) server6, server_len);
+	}
+	if( c < 0){
+		std::cerr << "Wrong socket from server" << std::endl;
+	}
+	return c;
+}
+
+int my_recvfrom(int *sock, char* buffer, int size, struct flags *flag,sockaddr_in *server,sockaddr_in6 *server6 ){
+	int c;
+	socklen_t server_len;
+	if(!flag->ipv6_flag){
+		server_len = sizeof(*server);
+		c = recvfrom(*sock,buffer,size,0,(struct sockaddr *) server, &server_len);
+	}
+	else{
+		server_len = sizeof(*server6);
+		c = recvfrom(*sock,buffer,size,0,(struct sockaddr *) server6, &server_len);
+	}
+	return c;
+}
+

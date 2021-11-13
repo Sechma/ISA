@@ -48,6 +48,10 @@ struct err_codes{
 // 2scs
 int read_tftp(int *sock, char* buffer_tftp, int msg_size,struct flags *flag,sockaddr_in *server,sockaddr_in6 *server6);
 int write_tftp(int *sock, char* buffer_tftp, int msg_size,struct flags *flag,sockaddr_in *server,sockaddr_in6 *server6);
+
+int my_sendto(int *sock,char *buffer, int msg, struct flags *flag,sockaddr_in *server,sockaddr_in6 *server6 );
+int my_recvfrom(int *sock, char* buffer, int size, struct flags *flag,sockaddr_in *server,sockaddr_in6 *server6 );
+
 void wait_for_ack(int *sock,struct flags *flag,sockaddr_in *server,sockaddr_in6 *server6,socklen_t *server_len);
 std::string file_name(std::string const & path);
 
