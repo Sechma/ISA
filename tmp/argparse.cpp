@@ -3,15 +3,15 @@
  Date:       14.11. 2021
  Author:  Marek Sechra <xsechr00@stud.fit.vutbr.cz>
 */
-#include <wordexp.h>
+
 #include "argparse.h"
 
-	flags parsing(int argc2, char *argv2[]){
+	flags parsing(int argc2, char* argv2[]){
 		flags flag;
 		int opt;
 		std::string tmp = "";
 		while( (opt = getopt(argc2,argv2,"RWd:t:s:mc:a:")) != -1){
-			std::cout << "opt: " << char(opt) << std::endl;
+			//std::cout << "opt: " << opt << std::endl;
 			switch(opt){
 				case('R'):
 					flag.RW_flag = 1;

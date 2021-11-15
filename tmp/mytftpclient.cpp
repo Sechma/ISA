@@ -7,39 +7,16 @@
 #include "mytftpclient.h"
 
 int main( int argc, char* argv[]) {
-
-	std::string s;
-	std::cout << "$ ";
-	std::getline(std::cin, s);
-
-	char **fake_argv;
-	int j = 0;
-	std::vector<char*> result;
-	result.push_back(argv[0]);
-
-	std::istringstream iss(s); 
-	for(std::string s; iss >> s; ){ 
-		j++;
-		char *str = (char*)malloc(sizeof(char)*s.length()+1);
-		strcpy(str,s.c_str()); 
-		std::cout << str;
-		result.push_back(str);
-	}
-	*fake_argv = (char*)malloc(sizeof(char*)*result.size());
-
-	 std::copy(result.begin(), result.end(), fake_argv);
-
-
-	if(argc < 1){
+	if(argc < 3){
 		std::cerr << "Mising parametres!"<< std::endl << "Example of usage: " << argv[0] << " -R/W" << " -d /home/user/readme.txt" << std::endl;
 		return 1;
 	}
 	else{
-		std::cout << std::endl << "<";
+		std::cout << "<";
 		std::cout << std::endl << "$ mytftpclient started 			";
 		print_actual_time();
 
-		flags flag = parsing(result.size(), fake_argv);
+		flags flag = parsing(argc, argv);
 		int sock, msg_size;
 		struct sockaddr_in server;
 		struct sockaddr_in6 server6;
@@ -60,7 +37,7 @@ int main( int argc, char* argv[]) {
 			server_len = sizeof(server);
 		}
 		struct timeval tv;
-		tv.tv_sec = 3;  /* 3 Secs Timeout */
+		tv.tv_sec = 3;  /* 30 Secs Timeout */
 		setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
 
 		/*Its time build Request packet for start communication*/
@@ -96,6 +73,7 @@ int main( int argc, char* argv[]) {
 		p += flag.mode.length()+ 1;
 		index += flag.mode.length()+1;
 
+		/*netestovany shit*/
 		strcpy(p,tsize.c_str());
 		p += tsize.length()+1; //0
 		char n = '0';
@@ -109,6 +87,7 @@ int main( int argc, char* argv[]) {
 			strcpy(p,num.c_str()); //vraci velikost souboru 
 			p += num.length()+1;
 		}
+		/*netestovany shit*/
 
 		if( flag.high_pass != 512){
 			strcpy(p,blc_size.c_str());
@@ -139,23 +118,22 @@ int main( int argc, char* argv[]) {
 			print_actual_time();
 			int c;
 			char buffer_data[1500];
-			
 			ushort block_num = 1;
 			FILE * file_w;
 			long file_size;
 			unsigned int last_size;
 			if( (0 == flag.mode.compare("netascii")) || (0 == flag.mode.compare("ascii")) )
-				file_w = fopen(flag.path.c_str(),"r");
-			else
-				file_w = fopen(flag.path.c_str(),"rb");
+ 				file_w = fopen(flag.path.c_str(),"r");
+ 			else
+ 				file_w = fopen(flag.path.c_str(),"rb");
 
-			if(file_w == NULL){
+ 			if(file_w == NULL){
 				std::cerr << "File doesnt exist";
 				exit(1);
 			}
 
-			c = my_sendto(&sock,buffer_tftp,msg_size,&flag,(struct sockaddr_in *) &server, (struct sockaddr_in6 *) &server6); //1.
-			fseek (file_w , 0 , SEEK_END);
+	 		c = my_sendto(&sock,buffer_tftp,msg_size,&flag,(struct sockaddr_in *) &server, (struct sockaddr_in6 *) &server6); //1.
+ 			fseek (file_w , 0 , SEEK_END);
 			file_size = ftell(file_w);
 			rewind (file_w);
 
@@ -163,8 +141,8 @@ int main( int argc, char* argv[]) {
 			wait_for_ack(&sock,&flag,(struct sockaddr_in *) &server,(struct sockaddr_in6 *) &server6, &server_len);
 			
 
-			unsigned int counter;
-			last_size = file_size%flag.high_pass;
+ 			unsigned int counter;
+ 			last_size = file_size%flag.high_pass;
 			counter = file_size/flag.high_pass;
 			while(1){
 
@@ -181,7 +159,7 @@ int main( int argc, char* argv[]) {
 				if(counter > 0){
 					memset(buffer_data,0,1500);
 					if (fread(buffer_data, flag.high_pass,1 ,file_w ) == 1){
-						std::memcpy(p_write,buffer_data,flag.high_pass);
+						strcpy(p_write,buffer_data);
 						msg_size = flag.high_pass;
 						counter--;
 					}
@@ -191,7 +169,7 @@ int main( int argc, char* argv[]) {
 					last_buffer = (char*)malloc(sizeof(char)*last_size+1);
 					memset(last_buffer,0,last_size+1);
 					if( fread(last_buffer,last_size,1,file_w ) == 1){
-						std::memcpy(p_write,last_buffer,last_size);
+						strcpy(p_write,last_buffer);
 						free(last_buffer);
 						std::cout << std::endl << "$ " << "Last packet" << std::endl;
 						msg_size = last_size;
@@ -199,9 +177,10 @@ int main( int argc, char* argv[]) {
 						break;
 					}
 				}
-				c = my_sendto(&sock,buffer_sent,msg_size+4,&flag,(struct sockaddr_in *) &server, (struct sockaddr_in6 *) &server6);
-				wait_for_ack(&sock,&flag,(struct sockaddr_in *) &server,(struct sockaddr_in6 *) &server6, &server_len);
-				block_num++;
+	 			//msg_size =  strlen(p_write) - strlen(buffer_sent);
+	 			c = my_sendto(&sock,buffer_sent,msg_size+4,&flag,(struct sockaddr_in *) &server, (struct sockaddr_in6 *) &server6);
+ 				wait_for_ack(&sock,&flag,(struct sockaddr_in *) &server,(struct sockaddr_in6 *) &server6, &server_len);
+ 				block_num++;
 			}
 			std::cout << std::endl;
 
@@ -328,6 +307,7 @@ void wait_for_ack(int *sock,struct flags *flag,sockaddr_in *server,sockaddr_in6 
 				exit(1);
 			}
 		}
+		//usleep(10000);
 }
 
 int my_sendto(int *sock, char* buffer, int msg, struct flags *flag,sockaddr_in *server,sockaddr_in6 *server6 ){
@@ -359,9 +339,9 @@ int my_recvfrom(int *sock, char* buffer, int size, struct flags *flag,sockaddr_i
 }
 
 void print_actual_time(){
-	time_t t;
-	struct tm * tt; 
-	time (&t); 
+	time_t t; // t passed as argument in function time()
+	struct tm * tt; // decalring variable for localtime()
+	time (&t); //passing argument to time()
 	tt = localtime(&t);
  	std::cout << "	"<< asctime(tt);
  	

@@ -67,14 +67,4 @@ std::string file_name(std::string const & path);
 */
 
 void print_actual_time();
-/*
-	Function print actual time 
-*/
-
-std::string tsize_write(std::string const & filename);
-/*
-Function tsize_write returning size of file which name is on input like string
-INPUT: std::string
-OUPUT std::string
-*/
 #endif

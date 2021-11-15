@@ -29,7 +29,7 @@ struct flags{
 
 #define MAX_OCTET 1468 /*MAX OCTET IN IP (MTU)*/
 
-flags parsing(int argc2, char *argv2[]);
+flags parsing(int argc2, char* argv2[]);
 /*
 Function parsing() parsing arguments from stdin a write err_codes to sderr 
 Inputs:
